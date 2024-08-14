@@ -1,4 +1,5 @@
 import streamlit as st
+import os
 from langchain.chains import ConversationalRetrievalChain
 from langchain.chat_models import ChatOpenAI
 from langchain.document_loaders import PyPDFLoader
@@ -16,22 +17,26 @@ def main():
         st.session_state.conversation = None
 
     # 환경변수로부터 OPENAI_API_KEY를 가져옴
-    openai_api_key = st.secrets["OPENAI_API_KEY"]
+    openai_api_key = os.getenv("OPENAI_API_KEY")
     if not openai_api_key:
-        st.warning("OPENAI_API_KEY가 st.secrets에 설정되지 않았습니다.")
+        st.error("환경 변수 'OPENAI_API_KEY'가 설정되지 않았습니다. Streamlit Cloud의 'Advanced settings'에서 설정해 주세요.")
         st.stop()
 
     with st.sidebar:
         process = st.button("Process")
 
     if process:
-        # 문서 로드 및 처리
-        documents = load_pdfs()
-        text_chunks = split_text(documents)
-        vectorstore = create_vectorstore(text_chunks)
+        try:
+            # 문서 로드 및 처리
+            documents = load_pdfs()
+            text_chunks = split_text(documents)
+            vectorstore = create_vectorstore(text_chunks)
 
-        st.session_state.conversation = create_conversation_chain(vectorstore, openai_api_key)
-        st.success("문서 처리가 완료되었습니다.")
+            st.session_state.conversation = create_conversation_chain(vectorstore, openai_api_key)
+            st.success("문서 처리가 완료되었습니다.")
+        except Exception as e:
+            st.error(f"문서 처리 중 오류가 발생했습니다: {e}")
+            st.stop()
 
     if st.session_state.conversation:
         query = st.text_input("질문을 입력하세요:")
@@ -41,20 +46,23 @@ def main():
             with st.chat_message("user"):
                 st.markdown(query)
 
-            with st.chat_message("assistant"):
-                chain = st.session_state.conversation
-                with st.spinner("답변 생성 중..."):
-                    result = chain({"question": query})
-                    response = result['answer']
-                    source_documents = result['source_documents']
-                    st.markdown(response)
+            try:
+                with st.chat_message("assistant"):
+                    chain = st.session_state.conversation
+                    with st.spinner("답변 생성 중..."):
+                        result = chain({"question": query})
+                        response = result['answer']
+                        source_documents = result['source_documents']
+                        st.markdown(response)
 
-                    # 참고 문서 표시
-                    with st.expander("참고 문서 확인"):
-                        for doc in source_documents:
-                            st.markdown(f"- {doc.metadata['source']}")
+                        # 참고 문서 표시
+                        with st.expander("참고 문서 확인"):
+                            for doc in source_documents:
+                                st.markdown(f"- {doc.metadata['source']}")
 
-            st.session_state.messages.append({"role": "assistant", "content": response})
+                st.session_state.messages.append({"role": "assistant", "content": response})
+            except Exception as e:
+                st.error(f"질문 처리 중 오류가 발생했습니다: {e}")
 
 def load_pdfs():
     pdf_files = [
