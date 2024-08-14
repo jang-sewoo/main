@@ -1,4 +1,3 @@
-import os
 import streamlit as st
 from langchain.chains import ConversationalRetrievalChain
 from langchain.chat_models import ChatOpenAI
@@ -7,7 +6,6 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.memory import ConversationBufferMemory
 from langchain.vectorstores import FAISS
-from langchain.memory import StreamlitChatMessageHistory
 
 def main():
     st.set_page_config(page_title="DirChat", page_icon=":books:")
@@ -17,25 +15,26 @@ def main():
     if "conversation" not in st.session_state:
         st.session_state.conversation = None
 
-    with st.sidebar:
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-        if not openai_api_key:
-            st.warning("OPENAI_API_KEY È¯°æ º¯¼ö°¡ ¼³Á¤µÇÁö ¾Ê¾Ò½À´Ï´Ù.")
-            st.stop()
+    # í™˜ê²½ë³€ìˆ˜ë¡œë¶€í„° OPENAI_API_KEYë¥¼ ê°€ì ¸ì˜´
+    openai_api_key = st.secrets["OPENAI_API_KEY"]
+    if not openai_api_key:
+        st.warning("OPENAI_API_KEYê°€ st.secretsì— ì„¤ì •ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤.")
+        st.stop()
 
+    with st.sidebar:
         process = st.button("Process")
 
     if process:
-        # ¹®¼­ ·Îµå ¹× Ã³¸®
+        # ë¬¸ì„œ ë¡œë“œ ë° ì²˜ë¦¬
         documents = load_pdfs()
         text_chunks = split_text(documents)
         vectorstore = create_vectorstore(text_chunks)
 
         st.session_state.conversation = create_conversation_chain(vectorstore, openai_api_key)
-        st.success("¹®¼­ Ã³¸®°¡ ¿Ï·áµÇ¾ú½À´Ï´Ù.")
+        st.success("ë¬¸ì„œ ì²˜ë¦¬ê°€ ì™„ë£Œë˜ì—ˆìŠµë‹ˆë‹¤.")
 
     if st.session_state.conversation:
-        query = st.text_input("Áú¹®À» ÀÔ·ÂÇÏ¼¼¿ä:")
+        query = st.text_input("ì§ˆë¬¸ì„ ì…ë ¥í•˜ì„¸ìš”:")
 
         if query:
             st.session_state.messages.append({"role": "user", "content": query})
@@ -44,14 +43,14 @@ def main():
 
             with st.chat_message("assistant"):
                 chain = st.session_state.conversation
-                with st.spinner("´äº¯ »ı¼º Áß..."):
+                with st.spinner("ë‹µë³€ ìƒì„± ì¤‘..."):
                     result = chain({"question": query})
                     response = result['answer']
                     source_documents = result['source_documents']
                     st.markdown(response)
 
-                    # Âü°í ¹®¼­ Ç¥½Ã
-                    with st.expander("Âü°í ¹®¼­ È®ÀÎ"):
+                    # ì°¸ê³  ë¬¸ì„œ í‘œì‹œ
+                    with st.expander("ì°¸ê³  ë¬¸ì„œ í™•ì¸"):
                         for doc in source_documents:
                             st.markdown(f"- {doc.metadata['source']}")
 
@@ -59,9 +58,9 @@ def main():
 
 def load_pdfs():
     pdf_files = [
-        "È¯º¸¼³ºñ ¿îÀüº¸¼ö ¸Å´º¾ó (22E1002 Áö¼®) 240219.pdf",
-        "ÇÑ±Û ¼øÈ¯ ¾Æ½ºÄÜ ÇÃ·£Æ® ¸Å´º¾ó R2(120423).pdf",
-        "Àú¼ÒÀ½¹ö³Ê(ÇÑ±Û)¸Å´º¾ó - Ã¼Å©º».pdf"
+        "í™˜ë³´ì„¤ë¹„ ìš´ì „ë³´ìˆ˜ ë§¤ë‰´ì–¼ (22E1002 ì§€ì„) 240219.pdf",
+        "í•œê¸€ ìˆœí™˜ ì•„ìŠ¤ì½˜ í”ŒëœíŠ¸ ë§¤ë‰´ì–¼ R2(120423).pdf",
+        "ì €ì†ŒìŒë²„ë„ˆ(í•œê¸€)ë§¤ë‰´ì–¼ - ì²´í¬ë³¸.pdf"
     ]
 
     documents = []
