@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import requests
 from langchain.chains import ConversationalRetrievalChain
 from langchain.chat_models import ChatOpenAI
 from langchain.document_loaders import PyPDFLoader
@@ -28,7 +29,7 @@ def main():
     if process:
         try:
             # 문서 로드 및 처리
-            documents = load_pdfs()
+            documents = load_pdfs_from_github()
             text_chunks = split_text(documents)
             vectorstore = create_vectorstore(text_chunks)
 
@@ -64,7 +65,9 @@ def main():
             except Exception as e:
                 st.error(f"질문 처리 중 오류가 발생했습니다: {e}")
 
-def load_pdfs():
+def load_pdfs_from_github():
+    # GitHub 저장소 URL 및 파일 목록
+    base_url = "https://raw.githubusercontent.com/jang-sewoo/main/main/"
     pdf_files = [
         "환보설비 운전보수 매뉴얼 (22E1002 지석) 240219.pdf",
         "한글 순환 아스콘 플랜트 매뉴얼 R2(120423).pdf",
@@ -73,9 +76,17 @@ def load_pdfs():
 
     documents = []
     for file in pdf_files:
-        loader = PyPDFLoader(file)
-        docs = loader.load_and_split()
-        documents.extend(docs)
+        url = base_url + file
+        response = requests.get(url)
+        if response.status_code == 200:
+            with open(file, "wb") as f:
+                f.write(response.content)
+            loader = PyPDFLoader(file)
+            docs = loader.load_and_split()
+            documents.extend(docs)
+            os.remove(file)  # 로딩 후 파일 삭제
+        else:
+            raise Exception(f"GitHub에서 {file} 파일을 다운로드하지 못했습니다. 상태 코드: {response.status_code}")
 
     return documents
 
