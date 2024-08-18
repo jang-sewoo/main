@@ -16,8 +16,8 @@ def main():
 
     if "conversation" not in st.session_state:
         st.session_state.conversation = None
+        st.session_state.messages = []
 
-    # 환경변수로부터 OPENAI_API_KEY를 가져옴
     openai_api_key = os.getenv("OPENAI_API_KEY")
     if not openai_api_key:
         st.error("환경 변수 'OPENAI_API_KEY'가 설정되지 않았습니다. Streamlit Cloud의 'Advanced settings'에서 설정해 주세요.")
@@ -28,8 +28,7 @@ def main():
 
     if process:
         try:
-            # 문서 로드 및 처리
-            documents = load_pdfs_from_github()
+            documents = load_pdfs_from_google_drive()
             text_chunks = split_text(documents)
             vectorstore = create_vectorstore(text_chunks)
 
@@ -52,41 +51,39 @@ def main():
                     chain = st.session_state.conversation
                     with st.spinner("답변 생성 중..."):
                         result = chain({"question": query})
-                        response = result['answer']
-                        source_documents = result['source_documents']
+                        response = result.get('answer', "답변을 찾을 수 없습니다.")
+                        source_documents = result.get('source_documents', [])
                         st.markdown(response)
 
-                        # 참고 문서 표시
                         with st.expander("참고 문서 확인"):
                             for doc in source_documents:
-                                st.markdown(f"- {doc.metadata['source']}")
+                                st.markdown(f"- {doc.metadata.get('source', '출처 불명')}")
 
                 st.session_state.messages.append({"role": "assistant", "content": response})
             except Exception as e:
                 st.error(f"질문 처리 중 오류가 발생했습니다: {e}")
 
-def load_pdfs_from_github():
-    # GitHub 저장소 URL 및 파일 목록
-    base_url = "https://raw.githubusercontent.com/jang-sewoo/main/main/"
-    pdf_files = [
-        "환보설비 운전보수 매뉴얼 (22E1002 지석) 240219.pdf",
-        "한글 순환 아스콘 플랜트 매뉴얼 R2(120423).pdf",
-        "저소음버너(한글)매뉴얼 - 체크본.pdf"
+def load_pdfs_from_google_drive():
+    file_ids = [
+        "1hDn6JwFQRggVqNLpmF4jb1Vo7-qaN1pT",
+        "1idBJCTxdqNS4GIE6YxJo1k0cprxn2rOE",
+        "1KieSNbxJK-NzUsz56M9cluqvzwlEMR9S"
     ]
 
     documents = []
-    for file in pdf_files:
-        url = base_url + file
+    for file_id in file_ids:
+        url = f"https://drive.google.com/uc?id={file_id}"
         response = requests.get(url)
         if response.status_code == 200:
-            with open(file, "wb") as f:
+            file_name = f"{file_id}.pdf"
+            with open(file_name, "wb") as f:
                 f.write(response.content)
-            loader = PyPDFLoader(file)
+            loader = PyPDFLoader(file_name)
             docs = loader.load_and_split()
             documents.extend(docs)
-            os.remove(file)  # 로딩 후 파일 삭제
+            os.remove(file_name)  # 로딩 후 파일 삭제
         else:
-            raise Exception(f"GitHub에서 {file} 파일을 다운로드하지 못했습니다. 상태 코드: {response.status_code}")
+            raise Exception(f"Google Drive에서 {file_id} 파일을 다운로드하지 못했습니다. 상태 코드: {response.status_code}")
 
     return documents
 
@@ -117,3 +114,4 @@ def create_conversation_chain(vectorstore, openai_api_key):
 
 if __name__ == '__main__':
     main()
+
