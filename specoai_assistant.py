@@ -1,11 +1,6 @@
 import streamlit as st
 import openai
 import os
-import pickle
-from loguru import logger
-import gdown
-
-CACHE_FILE = "cached_vectorstore.pkl"
 
 def main():
     st.set_page_config(
@@ -47,14 +42,15 @@ def main():
 
 def get_assistant_response(query, openai_api_key):
     openai.api_key = openai_api_key
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "당신은 도움이 되는 비서입니다."},
-            {"role": "user", "content": query}
-        ]
+    response = openai.Completion.create(
+        model="text-davinci-003",  # 또는 사용 가능한 최신 모델로 변경
+        prompt=f"User: {query}\nAssistant:",
+        max_tokens=150,
+        n=1,
+        stop=None,
+        temperature=0.7,
     )
-    return response['choices'][0]['message']['content']
+    return response.choices[0].text.strip()
 
 if __name__ == '__main__':
     main()
