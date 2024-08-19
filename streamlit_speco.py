@@ -52,16 +52,16 @@ def main():
                     with st.spinner("답변 생성 중..."):
                         result = chain({"question": query})
                         
-                        # 직접적으로 'answer'와 'source_documents'를 분리하여 처리합니다.
-                        answer = result.get('answer', "답변을 찾을 수 없습니다.")
+                        # 'answer' 키를 메모리에 저장하도록 지정합니다.
+                        response = result.get('answer', "답변을 찾을 수 없습니다.")
                         source_documents = result.get('source_documents', [])
-                        st.markdown(answer)
+                        st.markdown(response)
 
                         with st.expander("참고 문서 확인"):
                             for doc in source_documents:
                                 st.markdown(f"- {doc.metadata.get('source', '출처 불명')}")
 
-                st.session_state.messages.append({"role": "assistant", "content": answer})
+                st.session_state.messages.append({"role": "assistant", "content": response})
             except Exception as e:
                 st.error(f"질문 처리 중 오류가 발생했습니다: {e}")
 
@@ -109,7 +109,8 @@ def create_conversation_chain(vectorstore, openai_api_key):
         llm=llm, 
         retriever=vectorstore.as_retriever(),
         memory=memory,
-        return_source_documents=True
+        return_source_documents=True,
+        output_key="answer"  # 'answer'를 메모리에 저장하도록 지정
     )
 
     return conversation_chain
