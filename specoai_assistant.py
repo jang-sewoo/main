@@ -42,15 +42,14 @@ def main():
 
 def get_assistant_response(query, openai_api_key):
     openai.api_key = openai_api_key
-    response = openai.Completion.create(
-        model="text-davinci-003",  # 또는 사용 가능한 최신 모델로 변경
-        prompt=f"User: {query}\nAssistant:",
-        max_tokens=150,
-        n=1,
-        stop=None,
-        temperature=0.7,
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": query}
+        ]
     )
-    return response.choices[0].text.strip()
+    return response['choices'][0]['message']['content']
 
 if __name__ == '__main__':
     main()
