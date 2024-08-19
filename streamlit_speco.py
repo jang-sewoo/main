@@ -6,7 +6,6 @@ from langchain.chat_models import ChatOpenAI
 from langchain.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.memory import ConversationBufferMemory
 from langchain.vectorstores import FAISS
 
 def main():
@@ -52,7 +51,7 @@ def main():
                     with st.spinner("답변 생성 중..."):
                         result = chain({"question": query})
                         
-                        # 명확히 'answer'와 'source_documents'를 분리하여 처리합니다.
+                        # 결과에서 'answer'와 'source_documents'를 명확히 처리
                         response = result['answer']
                         source_documents = result['source_documents']
                         st.markdown(response)
@@ -64,7 +63,6 @@ def main():
                 st.session_state.messages.append({"role": "assistant", "content": response})
             except Exception as e:
                 st.error(f"질문 처리 중 오류가 발생했습니다: {e}")
-
 
 def load_pdfs_from_google_drive():
     file_ids = [
@@ -104,18 +102,15 @@ def create_vectorstore(text_chunks):
 
 def create_conversation_chain(vectorstore, openai_api_key):
     llm = ChatOpenAI(openai_api_key=openai_api_key, model_name='gpt-3.5-turbo', temperature=0)
-    memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
-
+    
+    # 메모리 없이 ConversationalRetrievalChain 생성
     conversation_chain = ConversationalRetrievalChain.from_llm(
         llm=llm, 
         retriever=vectorstore.as_retriever(),
-        memory=memory,
         return_source_documents=True,
-        output_key="answer"  # 'answer'를 메모리에 저장하도록 지정
     )
 
     return conversation_chain
-
 
 if __name__ == '__main__':
     main()
