@@ -107,9 +107,12 @@ def create_conversation_chain(vectorstore, openai_api_key):
         llm=llm, 
         retriever=vectorstore.as_retriever(),
         memory=memory,
-        return_source_documents=True,
-        output_key='answer'  # 'answer'를 명시적으로 설정합니다.
+        return_source_documents=True
     )
+
+    # 메모리에 저장할 데이터의 키를 명시적으로 설정합니다.
+    # 다중 응답 키가 있을 경우 사용할 키를 명시하는 방법을 적용합니다.
+    conversation_chain.output_key = 'answer'
 
     return conversation_chain
 
