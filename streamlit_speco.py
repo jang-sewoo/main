@@ -107,11 +107,11 @@ def create_conversation_chain(vectorstore, openai_api_key):
         llm=llm, 
         retriever=vectorstore.as_retriever(),
         memory=memory,
-        return_source_documents=True
+        return_source_documents=True,
+        output_key='answer'  # 'answer'를 명시적으로 설정합니다.
     )
 
     return conversation_chain
 
 if __name__ == '__main__':
     main()
-
