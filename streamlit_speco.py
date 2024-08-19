@@ -6,6 +6,7 @@ from langchain.chat_models import ChatOpenAI
 from langchain.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.memory import ConversationBufferMemory
 from langchain.vectorstores import FAISS
 
 def main():
@@ -15,7 +16,7 @@ def main():
 
     if "conversation" not in st.session_state:
         st.session_state.conversation = None
-        st.session_state.messages = []
+        st.session_state.chat_history = []
 
     openai_api_key = os.getenv("OPENAI_API_KEY")
     if not openai_api_key:
@@ -49,7 +50,10 @@ def main():
                 with st.chat_message("assistant"):
                     chain = st.session_state.conversation
                     with st.spinner("답변 생성 중..."):
-                        result = chain({"question": query})
+                        result = chain({
+                            "question": query,
+                            "chat_history": st.session_state.chat_history
+                        })
                         
                         # 결과에서 'answer'와 'source_documents'를 명확히 처리
                         response = result['answer']
@@ -59,6 +63,9 @@ def main():
                         with st.expander("참고 문서 확인"):
                             for doc in source_documents:
                                 st.markdown(f"- {doc.metadata.get('source', '출처 불명')}")
+
+                        # chat_history 업데이트
+                        st.session_state.chat_history.append((query, response))
 
                 st.session_state.messages.append({"role": "assistant", "content": response})
             except Exception as e:
@@ -102,12 +109,14 @@ def create_vectorstore(text_chunks):
 
 def create_conversation_chain(vectorstore, openai_api_key):
     llm = ChatOpenAI(openai_api_key=openai_api_key, model_name='gpt-3.5-turbo', temperature=0)
-    
-    # 메모리 없이 ConversationalRetrievalChain 생성
+    memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
+
     conversation_chain = ConversationalRetrievalChain.from_llm(
         llm=llm, 
         retriever=vectorstore.as_retriever(),
+        memory=memory,
         return_source_documents=True,
+        output_key="answer"  # 'answer'를 메모리에 저장하도록 지정
     )
 
     return conversation_chain
