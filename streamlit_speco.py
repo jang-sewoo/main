@@ -52,16 +52,16 @@ def main():
                     with st.spinner("답변 생성 중..."):
                         result = chain({"question": query})
                         
-                        # 명확히 'answer'와 'source_documents'를 분리하여 처리합니다.
-                        response = result.get('answer', "답변을 찾을 수 없습니다.")
+                        # 직접적으로 'answer'와 'source_documents'를 분리하여 처리합니다.
+                        answer = result.get('answer', "답변을 찾을 수 없습니다.")
                         source_documents = result.get('source_documents', [])
-                        st.markdown(response)
+                        st.markdown(answer)
 
                         with st.expander("참고 문서 확인"):
                             for doc in source_documents:
                                 st.markdown(f"- {doc.metadata.get('source', '출처 불명')}")
 
-                st.session_state.messages.append({"role": "assistant", "content": response})
+                st.session_state.messages.append({"role": "assistant", "content": answer})
             except Exception as e:
                 st.error(f"질문 처리 중 오류가 발생했습니다: {e}")
 
