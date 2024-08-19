@@ -51,6 +51,8 @@ def main():
                     chain = st.session_state.conversation
                     with st.spinner("답변 생성 중..."):
                         result = chain({"question": query})
+                        
+                        # 명확히 'answer'와 'source_documents'를 분리하여 처리합니다.
                         response = result.get('answer', "답변을 찾을 수 없습니다.")
                         source_documents = result.get('source_documents', [])
                         st.markdown(response)
@@ -109,10 +111,6 @@ def create_conversation_chain(vectorstore, openai_api_key):
         memory=memory,
         return_source_documents=True
     )
-
-    # 메모리에 저장할 데이터의 키를 명시적으로 설정합니다.
-    # 다중 응답 키가 있을 경우 사용할 키를 명시하는 방법을 적용합니다.
-    conversation_chain.output_key = 'answer'
 
     return conversation_chain
 
