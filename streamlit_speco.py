@@ -115,5 +115,6 @@ def create_conversation_chain(vectorstore, openai_api_key):
 
     return conversation_chain
 
+
 if __name__ == '__main__':
     main()
