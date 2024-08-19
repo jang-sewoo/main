@@ -3,6 +3,7 @@ import tiktoken
 from loguru import logger
 import os
 import gdown
+import pickle
 
 from langchain.chains import ConversationalRetrievalChain
 from langchain.chat_models import ChatOpenAI
@@ -21,10 +22,13 @@ from langchain.vectorstores import FAISS
 from langchain.callbacks import get_openai_callback
 from langchain.memory import StreamlitChatMessageHistory
 
+CACHE_FILE = "cached_vectorstore.pkl"
+
 def main():
     st.set_page_config(
-    page_title="DirChat",
-    page_icon=":books:")
+        page_title="DirChat",
+        page_icon=":books:"
+    )
 
     st.title("_Private Data :red[QA Chat]_ :books:")
 
@@ -44,21 +48,31 @@ def main():
         st.info("Please set the OpenAI API key as an environment variable.")
         st.stop()
 
-    # File URLs to be processed
-    file_urls = [
-        "https://drive.google.com/uc?id=1hDn6JwFQRggVqNLpmF4jb1Vo7-qaN1pT",
-        "https://drive.google.com/uc?id=1idBJCTxdqNS4GIE6YxJo1k0cprxn2rOE",
-        "https://drive.google.com/uc?id=1KieSNbxJK-NzUsz56M9cluqvzwlEMR9S"
-    ]
+    # Check if the vectorstore is already cached
+    if os.path.exists(CACHE_FILE) and not st.session_state.processComplete:
+        with open(CACHE_FILE, "rb") as f:
+            vetorestore = pickle.load(f)
+        st.session_state.conversation = get_conversation_chain(vetorestore, openai_api_key)
+        st.session_state.processComplete = True
+        logger.info("Loaded vectorstore from cache.")
+    elif not st.session_state.processComplete:
+        file_urls = [
+            "https://drive.google.com/uc?id=1hDn6JwFQRggVqNLpmF4jb1Vo7-qaN1pT",
+            "https://drive.google.com/uc?id=1idBJCTxdqNS4GIE6YxJo1k0cprxn2rOE",
+            "https://drive.google.com/uc?id=1KieSNbxJK-NzUsz56M9cluqvzwlEMR9S"
+        ]
 
-    if not st.session_state.processComplete:
         files_text = get_text(file_urls)
         text_chunks = get_text_chunks(files_text)
         vetorestore = get_vectorstore(text_chunks)
-     
-        st.session_state.conversation = get_conversation_chain(vetorestore, openai_api_key) 
 
+        # Cache the vectorstore for future use
+        with open(CACHE_FILE, "wb") as f:
+            pickle.dump(vetorestore, f)
+
+        st.session_state.conversation = get_conversation_chain(vetorestore, openai_api_key)
         st.session_state.processComplete = True
+        logger.info("Processed and cached the vectorstore.")
 
     if 'messages' not in st.session_state:
         st.session_state['messages'] = [{"role": "assistant", 
@@ -92,10 +106,8 @@ def main():
                     st.markdown(source_documents[0].metadata['source'], help = source_documents[0].page_content)
                     st.markdown(source_documents[1].metadata['source'], help = source_documents[1].page_content)
                     st.markdown(source_documents[2].metadata['source'], help = source_documents[2].page_content)
-                    
 
-
-# Add assistant message to chat history
+        # Add assistant message to chat history
         st.session_state.messages.append({"role": "assistant", "content": response})
 
 def tiktoken_len(text):
