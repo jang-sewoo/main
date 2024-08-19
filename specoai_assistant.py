@@ -18,7 +18,20 @@ def ask_question(assistant_id, query):
         "content": query
     }
     response = requests.post(url, headers=headers, json=data)
-    return response.json()
+    
+    # 응답 확인
+    if response.status_code == 200:
+        response_data = response.json()
+        try:
+            return response_data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError) as e:
+            st.error("응답을 처리하는 중 오류가 발생했습니다. 응답 형식이 예상과 다릅니다.")
+            st.json(response_data)  # 전체 응답 데이터를 보여줍니다.
+            return "응답을 처리하는 중 오류가 발생했습니다."
+    else:
+        st.error(f"API 요청 실패: {response.status_code}")
+        st.json(response.json())  # 오류 응답 내용을 보여줍니다.
+        return "API 요청 실패"
 
 def main():
     st.set_page_config(page_title="Speco API", page_icon=":books:")
@@ -44,8 +57,7 @@ def main():
 
         with st.chat_message("assistant"):
             with st.spinner("생각 중..."):
-                response = ask_question(st.session_state.assistant_id, query)
-                assistant_response = response["choices"][0]["message"]["content"]
+                assistant_response = ask_question(st.session_state.assistant_id, query)
                 st.markdown(assistant_response)
 
         st.session_state.messages.append({"role": "assistant", "content": assistant_response})
