@@ -1,23 +1,60 @@
 import streamlit as st
+import openai
+import os
+import pickle
+from loguru import logger
+import gdown
 
-# Streamlit 웹앱 제목
-st.title("Simple Chat Application")
+CACHE_FILE = "cached_vectorstore.pkl"
 
-# 채팅 메시지를 저장할 리스트
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+def main():
+    st.set_page_config(
+        page_title="DirChat",
+        page_icon=":books:"
+    )
 
-# 사용자가 입력한 채팅 메시지
-user_input = st.text_input("Enter your message:")
+    st.title("_SPECO Data :red[QA Chat]_ :books:")
 
-# 'Send' 버튼을 누르면 메시지를 리스트에 추가
-if st.button("Send"):
-    if user_input:
-        st.session_state.messages.append(user_input)
-        user_input = ""  # 입력 필드를 초기화
+    if "messages" not in st.session_state:
+        st.session_state.messages = [{"role": "assistant", 
+                                      "content": "안녕하세요! 궁금하신 것이 있으면 언제든 물어봐주세요!"}]
 
-# 채팅 메시지를 출력
-if st.session_state.messages:
-    st.write("### Chat History")
-    for msg in st.session_state.messages:
-        st.write(msg)
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+
+    if openai_api_key is None:
+        st.info("OpenAI API 키를 환경 변수로 설정해주세요.")
+        st.stop()
+
+    # 세션 상태에서 대화 기록을 불러오기
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # 채팅 로직
+    if query := st.chat_input("질문을 입력해주세요."):
+        st.session_state.messages.append({"role": "user", "content": query})
+
+        with st.chat_message("user"):
+            st.markdown(query)
+
+        with st.chat_message("assistant"):
+            with st.spinner("생각 중..."):
+                response = get_assistant_response(query, openai_api_key)
+                st.markdown(response)
+
+        # 비서 응답을 대화 기록에 추가
+        st.session_state.messages.append({"role": "assistant", "content": response})
+
+def get_assistant_response(query, openai_api_key):
+    openai.api_key = openai_api_key
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "당신은 도움이 되는 비서입니다."},
+            {"role": "user", "content": query}
+        ]
+    )
+    return response['choices'][0]['message']['content']
+
+if __name__ == '__main__':
+    main()
