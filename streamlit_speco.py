@@ -1,125 +1,161 @@
 import streamlit as st
+import tiktoken
+from loguru import logger
 import os
-import requests
+import gdown
+
 from langchain.chains import ConversationalRetrievalChain
 from langchain.chat_models import ChatOpenAI
+
 from langchain.document_loaders import PyPDFLoader
+from langchain.document_loaders import Docx2txtLoader
+from langchain.document_loaders import UnstructuredPowerPointLoader
+
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings import HuggingFaceEmbeddings
+
 from langchain.memory import ConversationBufferMemory
 from langchain.vectorstores import FAISS
 
-def main():
-    st.set_page_config(page_title="DirChat", page_icon=":books:")
+# from streamlit_chat import message
+from langchain.callbacks import get_openai_callback
+from langchain.memory import StreamlitChatMessageHistory
 
-    st.title("Private Data QA Chat :books:")
+def main():
+    st.set_page_config(
+    page_title="DirChat",
+    page_icon=":books:")
+
+    st.title("_Private Data :red[QA Chat]_ :books:")
 
     if "conversation" not in st.session_state:
         st.session_state.conversation = None
-        st.session_state.chat_history = []
 
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    if not openai_api_key:
-        st.error("환경 변수 'OPENAI_API_KEY'가 설정되지 않았습니다. Streamlit Cloud의 'Advanced settings'에서 설정해 주세요.")
-        st.stop()
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = None
+
+    if "processComplete" not in st.session_state:
+        st.session_state.processComplete = None
 
     with st.sidebar:
         process = st.button("Process")
+        
+    # Get OpenAI API key from environment variable
+    openai_api_key = os.getenv("OPENAI_API_KEY")
 
     if process:
-        try:
-            documents = load_pdfs_from_google_drive()
-            text_chunks = split_text(documents)
-            vectorstore = create_vectorstore(text_chunks)
-
-            st.session_state.conversation = create_conversation_chain(vectorstore, openai_api_key)
-            st.success("문서 처리가 완료되었습니다.")
-        except Exception as e:
-            st.error(f"문서 처리 중 오류가 발생했습니다: {e}")
+        if not openai_api_key:
+            st.info("Please set the OpenAI API key as an environment variable.")
             st.stop()
+        
+        file_urls = [
+            "https://drive.google.com/uc?id=1hDn6JwFQRggVqNLpmF4jb1Vo7-qaN1pT",
+            "https://drive.google.com/uc?id=1idBJCTxdqNS4GIE6YxJo1k0cprxn2rOE",
+            "https://drive.google.com/uc?id=1KieSNbxJK-NzUsz56M9cluqvzwlEMR9S"
+        ]
+        
+        files_text = get_text(file_urls)
+        text_chunks = get_text_chunks(files_text)
+        vetorestore = get_vectorstore(text_chunks)
+     
+        st.session_state.conversation = get_conversation_chain(vetorestore,openai_api_key) 
 
-    if st.session_state.conversation:
-        query = st.text_input("질문을 입력하세요:")
+        st.session_state.processComplete = True
 
-        if query:
-            st.session_state.messages.append({"role": "user", "content": query})
-            with st.chat_message("user"):
-                st.markdown(query)
+    if 'messages' not in st.session_state:
+        st.session_state['messages'] = [{"role": "assistant", 
+                                        "content": "안녕하세요! 주어진 문서에 대해 궁금하신 것이 있으면 언제든 물어봐주세요!"}]
 
-            try:
-                with st.chat_message("assistant"):
-                    chain = st.session_state.conversation
-                    with st.spinner("답변 생성 중..."):
-                        result = chain({
-                            "question": query,
-                            "chat_history": st.session_state.chat_history
-                        })
-                        
-                        # 결과에서 'answer'와 'source_documents'를 명확히 처리
-                        response = result['answer']
-                        source_documents = result['source_documents']
-                        st.markdown(response)
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-                        with st.expander("참고 문서 확인"):
-                            for doc in source_documents:
-                                st.markdown(f"- {doc.metadata.get('source', '출처 불명')}")
+    history = StreamlitChatMessageHistory(key="chat_messages")
 
-                        # chat_history 업데이트
-                        st.session_state.chat_history.append((query, response))
+    # Chat logic
+    if query := st.chat_input("질문을 입력해주세요."):
+        st.session_state.messages.append({"role": "user", "content": query})
 
-                st.session_state.messages.append({"role": "assistant", "content": response})
-            except Exception as e:
-                st.error(f"질문 처리 중 오류가 발생했습니다: {e}")
+        with st.chat_message("user"):
+            st.markdown(query)
 
-def load_pdfs_from_google_drive():
-    file_ids = [
-        "1hDn6JwFQRggVqNLpmF4jb1Vo7-qaN1pT",
-        "1idBJCTxdqNS4GIE6YxJo1k0cprxn2rOE",
-        "1KieSNbxJK-NzUsz56M9cluqvzwlEMR9S"
-    ]
+        with st.chat_message("assistant"):
+            chain = st.session_state.conversation
 
-    documents = []
-    for file_id in file_ids:
-        url = f"https://drive.google.com/uc?id={file_id}"
-        response = requests.get(url)
-        if response.status_code == 200:
-            file_name = f"{file_id}.pdf"
-            with open(file_name, "wb") as f:
-                f.write(response.content)
+            with st.spinner("Thinking..."):
+                result = chain({"question": query})
+                with get_openai_callback() as cb:
+                    st.session_state.chat_history = result['chat_history']
+                response = result['answer']
+                source_documents = result['source_documents']
+
+                st.markdown(response)
+                with st.expander("참고 문서 확인"):
+                    st.markdown(source_documents[0].metadata['source'], help = source_documents[0].page_content)
+                    st.markdown(source_documents[1].metadata['source'], help = source_documents[1].page_content)
+                    st.markdown(source_documents[2].metadata['source'], help = source_documents[2].page_content)
+                    
+
+
+# Add assistant message to chat history
+        st.session_state.messages.append({"role": "assistant", "content": response})
+
+def tiktoken_len(text):
+    tokenizer = tiktoken.get_encoding("cl100k_base")
+    tokens = tokenizer.encode(text)
+    return len(tokens)
+
+def get_text(urls):
+    doc_list = []
+    
+    for url in urls:
+        file_name = gdown.download(url, quiet=False)
+        logger.info(f"Downloaded {file_name}")
+        if file_name.endswith('.pdf'):
             loader = PyPDFLoader(file_name)
-            docs = loader.load_and_split()
-            documents.extend(docs)
-            os.remove(file_name)  # 로딩 후 파일 삭제
-        else:
-            raise Exception(f"Google Drive에서 {file_id} 파일을 다운로드하지 못했습니다. 상태 코드: {response.status_code}")
+            documents = loader.load_and_split()
+        elif file_name.endswith('.docx'):
+            loader = Docx2txtLoader(file_name)
+            documents = loader.load_and_split()
+        elif file_name.endswith('.pptx'):
+            loader = UnstructuredPowerPointLoader(file_name)
+            documents = loader.load_and_split()
 
-    return documents
+        doc_list.extend(documents)
+    return doc_list
 
-def split_text(documents):
+def get_text_chunks(text):
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=900,
-        chunk_overlap=100
+        chunk_overlap=100,
+        length_function=tiktoken_len
     )
-    return text_splitter.split_documents(documents)
+    chunks = text_splitter.split_documents(text)
+    return chunks
 
-def create_vectorstore(text_chunks):
-    embeddings = HuggingFaceEmbeddings(model_name="jhgan/ko-sroberta-multitask")
-    vectorstore = FAISS.from_documents(text_chunks, embeddings)
-    return vectorstore
+def get_vectorstore(text_chunks):
+    embeddings = HuggingFaceEmbeddings(
+                                        model_name="jhgan/ko-sroberta-multitask",
+                                        model_kwargs={'device': 'cpu'},
+                                        encode_kwargs={'normalize_embeddings': True}
+                                        )  
+    vectordb = FAISS.from_documents(text_chunks, embeddings)
+    return vectordb
 
-def create_conversation_chain(vectorstore, openai_api_key):
-    llm = ChatOpenAI(openai_api_key=openai_api_key, model_name='gpt-3.5-turbo', temperature=0)
-    memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
-
+def get_conversation_chain(vetorestore,openai_api_key):
+    llm = ChatOpenAI(openai_api_key=openai_api_key, model_name = 'gpt-3.5-turbo',temperature=0)
     conversation_chain = ConversationalRetrievalChain.from_llm(
-        llm=llm, 
-        retriever=vectorstore.as_retriever(),
-        memory=memory,
-        return_source_documents=True,
-        output_key="answer"  # 'answer'를 메모리에 저장하도록 지정
-    )
+            llm=llm, 
+            chain_type="stuff", 
+            retriever=vetorestore.as_retriever(search_type = 'mmr', vervose = True), 
+            memory=ConversationBufferMemory(memory_key='chat_history', return_messages=True, output_key='answer'),
+            get_chat_history=lambda h: h,
+            return_source_documents=True,
+            verbose = True
+        )
 
     return conversation_chain
 
 if __name__ == '__main__':
     main()
+
