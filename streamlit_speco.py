@@ -52,9 +52,9 @@ def main():
                     with st.spinner("답변 생성 중..."):
                         result = chain({"question": query})
                         
-                        # 'answer' 키를 메모리에 저장하도록 지정합니다.
-                        response = result.get('answer', "답변을 찾을 수 없습니다.")
-                        source_documents = result.get('source_documents', [])
+                        # 명확히 'answer'와 'source_documents'를 분리하여 처리합니다.
+                        response = result['answer']
+                        source_documents = result['source_documents']
                         st.markdown(response)
 
                         with st.expander("참고 문서 확인"):
@@ -64,6 +64,7 @@ def main():
                 st.session_state.messages.append({"role": "assistant", "content": response})
             except Exception as e:
                 st.error(f"질문 처리 중 오류가 발생했습니다: {e}")
+
 
 def load_pdfs_from_google_drive():
     file_ids = [
